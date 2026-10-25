@@ -1,138 +1,121 @@
-# StreamingApp
+# StreamingApp — Orchestration and Scaling
 
-Stream premium video content, host live watch parties, and manage your catalogue with a modern microservice architecture. The platform now ships with a production-ready admin portal, real-time chat, S3-backed adaptive streaming, and a redesigned cinematic frontend experience.
+Hero Vired graded project deploying a MERN streaming application on
+Amazon EKS using Docker, Amazon ECR, Jenkins and Helm.
 
-## Architecture
+Upstream application:
+[UnpredictablePrashant/StreamingApp](https://github.com/UnpredictablePrashant/StreamingApp)
 
-| Service | Port | Description |
-| --- | --- | --- |
-| `authService` | 3001 | User authentication, registration, JWT issuance |
-| `streamingService` | 3002 | Video catalogue, S3 playback endpoints, public APIs |
-| `adminService` | 3003 | Dedicated admin microservice for asset management and uploads |
-| `chatService` | 3004 | Websocket + REST chat for live watch parties |
-| `frontend` | 3000 | React SPA with revamped UI and integrated chat |
-| `mongo` | 27017 | Shared MongoDB instance |
+## Implemented
 
-All backend services share common database models and utilities through `backend/common`.
+- Five Docker images: React frontend and four Node.js backend services.
+- Private Amazon ECR repositories.
+- Jenkins on EC2 with automatic Git polling, image builds and ECR pushes.
+- Helm deployment to EKS 1.35 with two managed worker nodes.
+- Nginx API routing, React route fallback and WebSocket support.
+- MongoDB StatefulSet with encrypted EBS gp3 persistent storage.
+- Private S3 media storage with separate admin and streaming IAM roles.
+- JWT authentication and administrator access.
+- Video uploads, thumbnail delivery, playback and seeking.
+- Real-time chat and persisted message history.
+- CPU-based HPA for auth and streaming, from two to four replicas.
+- CloudWatch container logs, infrastructure metrics and alarms.
+- SNS email notifications for alarm and recovery states.
 
-## Environment Configuration
+## Documentation
 
-Create an `.env` for each service (or export variables before running). All services accept the standard AWS credentials for S3 access.
+| Document | Contents |
+|---|---|
+| [Architecture](docs/architecture.md) | Diagram, components, routing, security and limitations |
+| [Deployment and operations](docs/deployment.md) | Provisioning sequence, deployment, verification and troubleshooting |
+| [Evidence](docs/evidence.md) | Linked screenshots of implementation and validation |
+| [Upstream README](docs/upstream-readme.md) | Original application documentation |
 
-### Auth Service (`backend/authService/.env`)
-```ini
-PORT=3001
-MONGO_URI=mongodb://localhost:27017/streamingapp
-JWT_SECRET=changeme
-CLIENT_URLS=http://localhost:3000
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=ap-south-1
-AWS_S3_BUCKET=
+## Repository layout
+
+```text
+backend/
+  adminService/
+  authService/
+  chatService/
+  streamingService/
+frontend/
+helm/streamingapp/
+infrastructure/
+docs/
+  screenshots/
+Jenkinsfile
+docker-compose.yml
 ```
 
-### Streaming Service (`backend/streamingService/.env`)
-```ini
-PORT=3002
-MONGO_URI=mongodb://localhost:27017/streamingapp
-JWT_SECRET=changeme
-CLIENT_URLS=http://localhost:3000
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=ap-south-1
-AWS_S3_BUCKET=
-AWS_CDN_URL=
-STREAMING_PUBLIC_URL=http://localhost:3002
-```
+## Build and deployment
 
-### Admin Service (`backend/adminService/.env`)
-```ini
-PORT=3003
-MONGO_URI=mongodb://localhost:27017/streamingapp
-JWT_SECRET=changeme
-CLIENT_URLS=http://localhost:3000
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_REGION=ap-south-1
-AWS_S3_BUCKET=
-```
+Jenkins polls main approximately every five minutes. A changed commit
+triggers builds and pushes all five images using build-number tags.
 
-### Chat Service (`backend/chatService/.env`)
-```ini
-PORT=3004
-MONGO_URI=mongodb://localhost:27017/streamingapp
-JWT_SECRET=changeme
-CLIENT_URLS=http://localhost:3000
-```
-
-### Frontend build variables (`frontend/.env` or Docker build args)
-```ini
-REACT_APP_AUTH_API_URL=http://localhost:3001/api
-REACT_APP_STREAMING_API_URL=http://localhost:3002/api
-REACT_APP_STREAMING_PUBLIC_URL=http://localhost:3002
-REACT_APP_ADMIN_API_URL=http://localhost:3003/api/admin
-REACT_APP_CHAT_API_URL=http://localhost:3004/api/chat
-REACT_APP_CHAT_SOCKET_URL=http://localhost:3004
-```
-
-## Running with Docker Compose
-
-1. Populate the environment variables above (or rely on the defaults baked into `docker-compose.yml`).
-2. Build and start the stack:
-   ```bash
-   docker-compose up --build
-   ```
-3. Navigate to `http://localhost:3000` for the web app.
-
-The compose file provisions MongoDB plus all four Node.js microservices. S3 credentials are optional for local testing—you can still browse seeded metadata, but streaming requires valid S3 objects.
-
-## Local Development
-
-Install dependencies for each service:
+EKS deployments are performed manually with Helm. Select the desired
+image.tag in helm/streamingapp/values.yaml, then run:
 
 ```bash
-# auth service
-cd backend/authService && npm install
+helm lint helm/streamingapp
 
-# streaming service
-cd ../streamingService && npm install
-
-# admin service
-cd ../adminService && npm install
-
-# chat service
-cd ../chatService && npm install
-
-# frontend
-cd ../../frontend && npm install
+helm upgrade --install streamingapp helm/streamingapp \
+  --namespace streamingapp \
+  --wait \
+  --timeout 15m
 ```
 
-Run the services (in separate terminals) after starting MongoDB:
+Provisioning prerequisites, namespace and Secret requirements are documented
+in the deployment guide. The validated application image tag is build-5.
 
-```bash
-cd backend/authService && npm run dev
-cd backend/streamingService && npm run dev
-cd backend/adminService && npm run dev
-cd backend/chatService && npm run dev
-cd frontend && npm start
-```
+## Validation results
 
-## Feature Highlights
+| Test | Result |
+|---|---|
+| Registration and login on EKS | Passed |
+| Administrator upload to private S3 | Passed |
+| Thumbnail display and video playback | Passed |
+| Seeking with HTTP 206 range responses | Passed |
+| Chat between separate browser sessions | Passed |
+| Chat history after refresh | Passed |
+| MongoDB data after pod replacement | Passed |
+| HPA scale-up from 2 to 4 and scale-down to 2 | Passed |
+| CloudWatch application log delivery | Passed |
+| SNS email delivery | Passed |
 
-- **S3-backed adaptive streaming** with secure signed uploads for admins.
-- **Dedicated admin microservice** for video ingestion, metadata management, and featured curation.
-- **Real-time chat** overlay in the player (Socket.IO + persistent message history).
-- **Modern React experience** featuring cinematic hero sections, dynamic carousels, and responsive design.
-- **Role-aware access control** across frontend routes and backend microservices.
+The HPA test used a temporary CPU workload. It demonstrates autoscaler
+behavior, not application throughput capacity.
 
-## Testing
+## Access and lab constraints
 
-Automated tests are not yet included. Recommended smoke checks:
+AWS rejected load balancer creation for this account. The frontend uses
+NodePort 30080 with source-IP-restricted security-group access instead.
 
-1. Register and log in through the web UI.
-2. Upload a small video + thumbnail via the admin dashboard (requires valid S3 credentials).
-3. Confirm playback from the browse page and verify that chat messages broadcast between multiple browser tabs.
+Validated endpoints at the time of testing:
+- http://13.201.183.231:30080
+- http://13.201.166.45:30080
 
-## License
+Worker public IPs can change. Access is restricted to the configured
+operator IP, so these are not unrestricted public demo links.
 
-MIT © StreamFlix Team
+The lab uses HTTP, one MongoDB instance, and one chat replica.
+Worker-node autoscaling is not installed. Production considerations and
+the unresolved dependency audit findings are recorded in the architecture
+document.
+
+## Credentials and configuration
+
+AWS CLI project commands use profile herovired in ap-south-1.
+Application S3 access uses IAM roles for service accounts.
+
+Database credentials and JWT secrets are stored outside Git in a
+Kubernetes Secret. Database connection logging was corrected and the
+exposed database password was rotated.
+
+Do not commit .env files, AWS credentials, private keys or exported
+Kubernetes Secret data.
+
+## Optional bonus
+
+SNS email notifications are implemented. Slack, Microsoft Teams or
+Telegram integration is not implemented.
