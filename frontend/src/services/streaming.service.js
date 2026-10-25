@@ -45,6 +45,14 @@ const buildPlaybackUrl = (value) => {
 
   const base = STREAMING_PUBLIC_URL.replace(/\/$/, '');
   const path = value.startsWith('/') ? value : `/${value}`;
+
+  if (
+    base.startsWith('/') &&
+    (path === base || path.startsWith(`${base}/`))
+  ) {
+    return path;
+  }
+
   return `${base}${path}`;
 };
 
