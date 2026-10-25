@@ -1,0 +1,56 @@
+image:
+  registry: "483510445289.dkr.ecr.ap-south-1.amazonaws.com"
+  tag: "build-5"
+  pullPolicy: IfNotPresent
+
+existingSecret: streamingapp-secrets
+
+services:
+  frontend:
+    port: 80
+    replicas: 2
+  auth:
+    port: 3001
+    replicas: 2
+  streaming:
+    port: 3002
+    replicas: 2
+  admin:
+    port: 3003
+    replicas: 1
+  chat:
+    port: 3004
+    replicas: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+mongodb:
+  image: mongo:6
+  database: streamingapp
+  storageSize: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+clientUrls: "http://localhost:3000,http://localhost:8081,http://13.201.183.231:30080,http://13.201.166.45:30080"
+
+mediaBucket: herovired-streamingapp-483510445289-ap-south-1
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+  services:
+    - auth
+    - streaming

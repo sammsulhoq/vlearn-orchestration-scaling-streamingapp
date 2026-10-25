@@ -1,0 +1,76 @@
+{{- range $name, $service := .Values.services }}
+{{- if ne $name "frontend" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+spec:
+  {{- if not (and $.Values.autoscaling.enabled (has $name $.Values.autoscaling.services)) }}
+  replicas: {{ $service.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+      release: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+        release: {{ $.Release.Name }}
+    spec:
+      {{- if or (eq $name "admin") (eq $name "streaming") }}
+      serviceAccountName: {{ $.Release.Name }}-{{ $name }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.image.registry }}/streamingapp/{{ $name }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $service.port }}
+          env:
+            {{- if or (eq $name "admin") (eq $name "streaming") }}
+            - name: AWS_S3_BUCKET
+              value: {{ $.Values.mediaBucket | quote }}
+            {{- end }}
+            {{- if eq $name "admin" }}
+            - name: AWS_CDN_URL
+              value: "/streaming/api/streaming/thumbnails"
+            {{- end }}
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: {{ $service.port | quote }}
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecret }}
+                  key: MONGO_URI
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.existingSecret }}
+                  key: JWT_SECRET
+            - name: CLIENT_URLS
+              value: {{ $.Values.clientUrls | default "http://localhost:3000" | quote }}
+            - name: AWS_REGION
+              value: ap-south-1
+            {{- if eq $name "streaming" }}
+            - name: STREAMING_PUBLIC_URL
+              value: "/streaming"
+            {{- end }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+{{- end }}
+{{- end }}

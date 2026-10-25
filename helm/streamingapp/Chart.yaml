@@ -1,0 +1,6 @@
+apiVersion: v2
+name: streamingapp
+description: MERN streaming application with four backend services
+type: application
+version: 0.1.0
+appVersion: "build-5"

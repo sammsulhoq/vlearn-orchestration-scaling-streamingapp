@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-mongodb
+spec:
+  serviceName: mongo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        release: {{ .Release.Name }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: mongodb
+          image: {{ .Values.mongodb.image | quote }}
+          ports:
+            - name: mongodb
+              containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: mongodb-root-username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: mongodb-root-password
+          resources:
+            {{- toYaml .Values.mongodb.resources | nindent 12 }}
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          startupProbe:
+            timeoutSeconds: 10
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "quit(db.adminCommand({ping: 1}).ok ? 0 : 1)"
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --quiet
+                - --eval
+                - "quit(db.adminCommand({ping: 1}).ok ? 0 : 1)"
+            periodSeconds: 10
+            timeoutSeconds: 10
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-mongodb-data
